@@ -40,7 +40,14 @@
       e.preventDefault();
       const email = $("#email").value.trim();
       const { error } = await S.sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: location.href.split("#")[0] } });
-      $("#loginMsg").textContent = error ? "Não foi possível enviar: e-mail não cadastrado ou limite de envios. Fale com a administração." : `Link enviado para ${email}. Abra no mesmo aparelho.`;
+      let msg = `Link enviado para ${email}. Abra no mesmo aparelho.`;
+      if (error) {
+        const t = (error.message || "").toLowerCase();
+        if (error.status === 429 || t.includes("rate") || t.includes("security purposes")) msg = "Limite de envio de e-mails atingido. Aguarde alguns minutos (ou até 1 hora) e tente de novo. Use o último link recebido, se ainda não abriu.";
+        else if (t.includes("signups not allowed") || t.includes("not found")) msg = "E-mail não cadastrado. Peça o convite à administração.";
+        else msg = "Não foi possível enviar: " + error.message;
+      }
+      $("#loginMsg").textContent = msg;
     });
   }
   async function entrar(sess) {
