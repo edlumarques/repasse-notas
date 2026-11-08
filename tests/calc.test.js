@@ -1,0 +1,24 @@
+const assert = require("assert");
+const C = require("../js/calc.js");
+const sample = require(process.argv[2]);
+const notas = sample.map(n => { const c = C.conferir(n); return { ...n, id: String(n.n), ret: c.ret, alertas: c.alertas }; });
+const a = C.apurar(notas, "2026-10-01", "2026-10-30");
+assert.strictEqual(a.notas, 65);
+assert.strictEqual(a.faturamento, 11780000);
+assert.strictEqual(a.devTotal, 1287554);
+assert.strictEqual(a.retTotal, 17220);
+assert.strictEqual(a.dev.adic, 0);
+assert.strictEqual(a.reserva, 1767000);
+assert.strictEqual(a.sobra, 479446);
+const n556 = notas.find(n => n.n === 556);
+assert.deepStrictEqual([n556.ret.pis, n556.ret.cof, n556.ret.csl, n556.ret.irr], [1820, 8400, 2800, 4200]);
+assert.strictEqual(n556.alertas[0][0], "info");
+assert.ok(notas.find(n => n.n === 510).alertas.some(x => x[0] === "warn"));
+const atrib = {}; notas.forEach(n => { if (!n.x) atrib[n.id] = { s1: 100 }; }); atrib["510"] = { s1: 50, s2: 50 };
+const r = C.repasse(notas, atrib, [{ id: "s1" }, { id: "s2" }]);
+assert.strictEqual(r.socios.s1.repasse + r.socios.s2.repasse, a.repasseTotal);
+assert.strictEqual(r.socios.s2.repasse, 1181500);
+assert.strictEqual(r.sem.notas, 0);
+// adicional de IRPJ: R$ 300 mil num mês -> base 24 mil, excede 4 mil -> R$ 400
+assert.strictEqual(C.apurar([{ b: 30000000, iss: 0, ibs: 0, cbs: 0, x: false, ret: { pis: 0, cof: 0, csl: 0, irr: 0, iss: 0 } }], "2026-11-01", "2026-11-30").dev.adic, 40000);
+console.log("Todos os testes passaram");
