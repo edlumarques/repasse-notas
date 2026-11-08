@@ -31,24 +31,42 @@
       <h1>Repasse de Notas</h1>
       <p class="muted">${esc(CFG.EMPRESA.razao)}</p>
       <form id="fLogin">
-        <label class="field" for="email">Seu e-mail<input type="email" id="email" required autocomplete="email"></label>
-        <button class="primary" type="submit">Receber link de acesso</button>
+        <label class="field" for="email">E-mail<input type="email" id="email" required autocomplete="username"></label>
+        <label class="field" for="senha">Senha<input type="password" id="senha" required autocomplete="current-password"></label>
+        <button class="primary" type="submit" id="btnEntrar">Entrar</button>
       </form>
-      <p class="note" id="loginMsg">${msg ? esc(msg) : "Enviamos um link para o seu e-mail. Só entra quem foi cadastrado pela administração."}</p>
+      <p class="note" id="loginMsg">${msg ? esc(msg) : "O acesso é criado pela administração. Esqueceu a senha? Peça uma nova à administração."}</p>
     </div>`;
     $("#fLogin").addEventListener("submit", async e => {
       e.preventDefault();
-      const email = $("#email").value.trim();
-      const { error } = await S.sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: location.href.split("#")[0] } });
-      let msg = `Link enviado para ${email}. Abra no mesmo aparelho.`;
+      const btn = $("#btnEntrar"); btn.disabled = true; btn.textContent = "Entrando…";
+      const { data, error } = await S.sb.auth.signInWithPassword({ email: $("#email").value.trim(), password: $("#senha").value });
       if (error) {
+        btn.disabled = false; btn.textContent = "Entrar";
         const t = (error.message || "").toLowerCase();
-        if (error.status === 429 || t.includes("rate") || t.includes("security purposes")) msg = "Limite de envio de e-mails atingido. Aguarde alguns minutos (ou até 1 hora) e tente de novo. Use o último link recebido, se ainda não abriu.";
-        else if (t.includes("signups not allowed") || t.includes("not found")) msg = "E-mail não cadastrado. Peça o convite à administração.";
-        else msg = "Não foi possível enviar: " + error.message;
+        $("#loginMsg").textContent = t.includes("invalid") ? "E-mail ou senha incorretos." : t.includes("not confirmed") ? "Acesso ainda não confirmado. Peça à administração para confirmar o usuário." : "Não foi possível entrar: " + error.message;
+        return;
       }
-      $("#loginMsg").textContent = msg;
+      entrar(data.session);
     });
+  }
+  function trocarSenha() {
+    const box = document.createElement("section");
+    box.className = "panel"; box.id = "boxSenha";
+    box.innerHTML = `<form id="fSenha" class="controls">
+        <label class="field" for="s1">Nova senha (mínimo 8 caracteres)<input type="password" id="s1" minlength="8" required autocomplete="new-password"></label>
+        <label class="field" for="s2">Repita a nova senha<input type="password" id="s2" minlength="8" required autocomplete="new-password"></label>
+        <button class="primary" type="submit">Salvar senha</button><button type="button" id="cancSenha">Cancelar</button>
+        <span class="note" id="senhaMsg"></span></form>`;
+    $("#boxSenha")?.remove(); app.insertBefore(box, app.children[1]);
+    $("#cancSenha").onclick = () => box.remove();
+    $("#fSenha").onsubmit = async e => {
+      e.preventDefault();
+      if ($("#s1").value !== $("#s2").value) { $("#senhaMsg").textContent = "As senhas não conferem."; return; }
+      const { error } = await S.sb.auth.updateUser({ password: $("#s1").value });
+      if (error) { $("#senhaMsg").textContent = "Não salvou: " + error.message; return; }
+      box.remove(); toast("Senha alterada");
+    };
   }
   async function entrar(sess) {
     S.user = sess.user;
@@ -180,7 +198,7 @@
     return `<header class="top">
       <div style="display:grid;gap:4px"><h1>${socio ? "Minha produção" : "Repasse de notas fiscais aos sócios"}</h1>
       <div class="muted">${esc(CFG.EMPRESA.razao)} · ${esc(CFG.EMPRESA.cidade)}</div></div>
-      <div class="chips"><span class="chip">${socio ? esc(socio.nome) : "Administração"}</span><span class="muted" style="font-size:13px">${esc(S.user.email)}</span><button class="x" id="sair">Sair</button></div>
+      <div class="chips"><span class="chip">${socio ? esc(socio.nome) : "Administração"}</span><span class="muted" style="font-size:13px">${esc(S.user.email)}</span><button class="x" id="trocaSenha">Trocar senha</button><button class="x" id="sair">Sair</button></div>
     </header>`;
   }
   function controlesPeriodo(extra = "") {
@@ -194,6 +212,7 @@
   }
   function ligarComuns() {
     $("#sair").onclick = () => S.sb.auth.signOut();
+    $("#trocaSenha").onclick = trocarSenha;
     $("#de").onchange = e => { S.de = e.target.value; carregar(); };
     $("#ate").onchange = e => { S.ate = e.target.value; carregar(); };
     document.querySelectorAll("[data-mes]").forEach(b => b.onclick = () => {
@@ -363,7 +382,7 @@
   }
   function abaSocios(el) {
     const acesso = s => S.usuarios.some(u => u.socio_id === s.id) ? `<span class="chip ok">Acesso liberado</span>` : (s.email ? `<span class="chip warn">Aguardando convite/login</span>` : `<span class="chip">Sem e-mail</span>`);
-    el.innerHTML = `<p class="note">Para dar acesso: cadastre o e-mail do sócio aqui e envie o convite em Supabase → Authentication → Users → Invite user, com o mesmo e-mail. O vínculo é automático.</p>
+    el.innerHTML = `<p class="note">Para dar acesso: cadastre o e-mail do sócio aqui. Depois, no Supabase, vá em Authentication → Users → Add user → Create new user, use o mesmo e-mail, crie uma senha provisória e marque “Auto Confirm User”. O vínculo é automático; o sócio pode trocar a senha pelo botão “Trocar senha”.</p>
       <div class="tablewrap"><table><thead><tr><th>Nome</th><th>CRM</th><th>E-mail</th><th>Ativo</th><th>Acesso</th><th></th></tr></thead><tbody>
       ${S.socios.map(s => `<tr data-id="${s.id}"><td><input type="text" id="n-${s.id}" value="${esc(s.nome)}" aria-label="Nome"></td><td><input type="text" id="c-${s.id}" value="${esc(s.crm || "")}" aria-label="CRM" style="width:110px"></td>
         <td><input type="email" id="e-${s.id}" value="${esc(s.email || "")}" aria-label="E-mail"></td><td><input type="checkbox" id="a-${s.id}" ${s.ativo ? "checked" : ""} aria-label="Ativo"></td><td>${acesso(s)}</td><td><button class="x salvarS" data-id="${s.id}">Salvar</button></td></tr>`).join("")}

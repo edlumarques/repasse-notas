@@ -27,7 +27,7 @@ header.top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-c
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
 .controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end}
 .field{display:grid;gap:4px;font-size:13px;color:var(--muted)}
-input[type=date],input[type=text],input[type=email],input[type=number],input[type=search]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=date],input[type=text],input[type=email],input[type=password],input[type=number],input[type=search]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
 input[type=number]{width:64px}
 button,.btn{font:inherit;font-size:14px;cursor:pointer;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:6px 12px}
 button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}

@@ -2,7 +2,7 @@
 
 App web para importar as NFS-e da sociedade, conferir os impostos, atribuir cada nota a um ou mais sócios, calcular o repasse de 85% e gerar relatórios em PDF. Cada sócio entra com o próprio e-mail e vê só a própria produção.
 
-- **Banco e login:** Supabase (Postgres + login por link no e-mail). As permissões ficam no banco: um sócio não consegue ler as notas de outro, mesmo mexendo no navegador.
+- **Banco e login:** Supabase (Postgres + login por e-mail e senha). As permissões ficam no banco: um sócio não consegue ler as notas de outro, mesmo mexendo no navegador.
 - **Site:** arquivos estáticos (HTML, CSS e JS), hospedados no GitHub Pages.
 - **Notas:** XML ABRASF 2.03, soltos ou em .zip. A leitura acontece no navegador.
 
@@ -11,8 +11,8 @@ App web para importar as NFS-e da sociedade, conferir os impostos, atribuir cada
 ### 1. Supabase
 1. Crie um projeto em [supabase.com](https://supabase.com), região **South America (São Paulo)**.
 2. Abra **SQL Editor → New query**, cole todo o conteúdo de `supabase/schema.sql` e clique em **Run**.
-3. Em **Authentication → Providers → Email**, deixe ativado e **desligue "Allow new users to sign up"**. Assim só entra quem for convidado.
-4. Em **Authentication → URL Configuration**, coloque o endereço do site (passo 3) em **Site URL** e em **Redirect URLs**.
+3. Em **Authentication → Sign In / Providers**, deixe o **Email** ativado e **desligue "Allow new users to sign up"**. Assim só entra quem a administração criar.
+4. Em **Authentication → URL Configuration**, coloque o endereço do site (passo 3) em **Site URL**.
 5. Copie a **Project URL** (botão **Connect** no topo, ou Project Settings → Data API) e a **Publishable key**, que começa com `sb_publishable_` (Project Settings → API Keys). Em projetos antigos, a chave equivalente é a **anon public**, na aba *Legacy API Keys*.
 
 ### 2. Configuração
@@ -24,20 +24,26 @@ Edite `js/config.js` e preencha `SUPABASE_URL` e `SUPABASE_ANON_KEY` (cole ali a
 3. O site fica em `https://SEU-USUARIO.github.io/NOME-DO-REPOSITORIO/`.
 
 ### 4. Seu acesso de administrador
-1. Em **Authentication → Users → Invite user**, convide o seu e-mail e abra o link recebido.
+1. Em **Authentication → Users → Add user → Create new user**, informe seu e-mail e uma senha, e marque **Auto Confirm User**.
 2. No **SQL Editor**, rode (trocando o e-mail):
    ```sql
    insert into public.usuarios (user_id, papel)
    select id, 'admin' from auth.users where email = 'seu-email@exemplo.com';
    ```
-3. Recarregue o site. Você entra como administração.
+3. Entre no site com e-mail e senha. Você entra como administração.
 
 ### 5. Acesso dos sócios
 1. No app, aba **Sócios e acessos**: cadastre nome, CRM e e-mail de cada sócio.
-2. No Supabase, **Authentication → Users → Invite user** com o mesmo e-mail.
-3. O sócio abre o link e já entra em **Minha produção**. O vínculo é automático pelo e-mail.
+2. No Supabase, **Authentication → Users → Add user → Create new user** com o mesmo e-mail, uma senha provisória e **Auto Confirm User** marcado.
+3. Passe a senha ao sócio. Ele entra em **Minha produção** (o vínculo é automático pelo e-mail) e troca a senha pelo botão **Trocar senha**.
 
-Para mais alguém da administração, convide o e-mail e rode o mesmo SQL do passo 4.
+Esqueceu a senha? No **SQL Editor** (troque e-mail e senha):
+```sql
+update auth.users set encrypted_password = extensions.crypt('NovaSenha123', extensions.gen_salt('bf'))
+where email = 'socio@exemplo.com';
+```
+
+Para mais alguém da administração, crie o usuário do mesmo jeito e rode o SQL do passo 4 com o e-mail dele.
 
 ## Uso mensal
 1. Baixe as notas do mês em XML (.zip) e clique em **Carregar .zip ou XML**. Reimportar a mesma nota só atualiza os dados dela.
