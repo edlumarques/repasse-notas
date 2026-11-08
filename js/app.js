@@ -327,37 +327,30 @@
   }
   async function abaFechamento(el) {
     el.innerHTML = `<p class="muted">Carregando meses…</p>`;
-    const todos = [];
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await S.sb.from("notas").select("emissao,cancelada").range(from, from + 999);
-      if (error || !data) break; todos.push(...data); if (data.length < 1000) break;
-    }
-    const meses = {}; todos.forEach(r => { if (!r.cancelada) meses[mesDe(r.emissao)] = (meses[mesDe(r.emissao)] || 0) + 1; });
-    const ks = Object.keys(meses).sort().reverse();
+    const { data: meses, error } = await S.sb.rpc("meses_resumo");
+    if (error) { el.innerHTML = `<p class="err">${esc(error.message)}</p>`; return; }
     const nomeMes = ym => new Date(ym + "-15").toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     el.innerHTML = `<p class="note">Fechar um mês trava notas e atribuições dele, e os sócios passam a ver os valores como definitivos. Para corrigir, reabra o mês.</p>
-      <div class="tablewrap"><table><thead><tr><th>Mês</th><th class="r">Notas</th><th>Situação</th><th></th></tr></thead><tbody>
-      ${ks.map(k => `<tr><td>${nomeMes(k)}</td><td class="r num">${meses[k]}</td><td>${S.fechados.has(k) ? `<span class="chip ok">Fechado</span>` : `<span class="chip warn">Aberto</span>`}</td>
-        <td class="r">${S.fechados.has(k) ? `<button class="x reabrir" data-m="${k}">Reabrir</button>` : `<button class="primary x fechar" data-m="${k}">Fechar mês</button>`}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">Nenhuma nota importada.</td></tr>`}
+      <div class="tablewrap"><table><thead><tr><th>Mês</th><th class="r">Notas</th><th class="r">Sem sócio</th><th class="r">Alertas</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${(meses || []).map(m => `<tr><td>${nomeMes(m.mes)}</td><td class="r num">${m.notas}</td>
+        <td class="r num">${m.sem_socio ? `<span class="chip warn">${m.sem_socio}</span>` : "0"}</td><td class="r num">${m.alertas ? `<span class="chip warn">${m.alertas}</span>` : "0"}</td>
+        <td>${m.fechado ? `<span class="chip ok">Fechado</span>` : `<span class="chip warn">Aberto</span>`}</td>
+        <td class="r">${m.fechado ? `<button class="x reabrir" data-m="${m.mes}">Reabrir</button>` : `<button class="primary x fechar" data-m="${m.mes}" data-pend="${Number(m.sem_socio) + Number(m.alertas)}">Fechar mês</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">Nenhuma nota importada.</td></tr>`}
       </tbody></table></div><p class="err" id="fechMsg"></p>`;
     el.querySelectorAll(".fechar").forEach(b => b.onclick = async () => {
       const m = b.dataset.m;
-      const { data: ns } = await S.sb.from("notas").select("id,alertas,conferido").gte("emissao", m + "-01").lte("emissao", ultimoDia(m)).eq("cancelada", false);
-      const ids = (ns || []).map(n => n.id); let somas = {};
-      for (let i = 0; i < ids.length; i += 150) { const { data } = await S.sb.from("atribuicoes").select("nota_id,percentual").in("nota_id", ids.slice(i, i + 150)); (data || []).forEach(a => somas[a.nota_id] = (somas[a.nota_id] || 0) + Number(a.percentual)); }
-      const semSocio = ids.filter(id => Math.abs((somas[id] || 0) - 100) > 0.001).length;
-      const alert = (ns || []).filter(n => !n.conferido && (n.alertas || []).some(a => a[0] !== "info")).length;
-      if ((semSocio || alert) && b.dataset.confirmado !== "1") {
-        $("#fechMsg").textContent = `${nomeMes(m)}: ${semSocio} nota(s) sem sócio e ${alert} alerta(s) pendente(s). Clique de novo em “Fechar mês” para fechar assim mesmo.`;
+      if (Number(b.dataset.pend) && b.dataset.confirmado !== "1") {
+        $("#fechMsg").textContent = `${nomeMes(m)} ainda tem notas sem sócio ou alertas pendentes. Clique de novo em “Fechar mês” para fechar assim mesmo.`;
         b.dataset.confirmado = "1"; return;
       }
-      const { error } = await S.sb.from("fechamentos").insert({ competencia: m + "-01" });
-      if (error) { toast("Não fechou: " + error.message); return; }
+      const { error } = await S.sb.rpc("fechar_mes", { p_mes: m + "-01" });
+      if (error) { $("#fechMsg").textContent = "Não fechou: " + error.message; return; }
       S.fechados.add(m); toast(`${nomeMes(m)} fechado`); renderAdmin();
     });
     el.querySelectorAll(".reabrir").forEach(b => b.onclick = async () => {
-      const m = b.dataset.m; const { error } = await S.sb.from("fechamentos").delete().eq("competencia", m + "-01");
-      if (error) { toast("Não reabriu: " + error.message); return; }
+      const m = b.dataset.m;
+      const { error } = await S.sb.rpc("reabrir_mes", { p_mes: m + "-01" });
+      if (error) { $("#fechMsg").textContent = "Não reabriu: " + error.message; return; }
       S.fechados.delete(m); toast(`${nomeMes(m)} reaberto`); renderAdmin();
     });
   }
